@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.purian/widgetdash-mcp",
+  "title": "WidgetDash",
+  "description": "Push any number to your iPhone Home Screen / Lock Screen widgets and Live Activities.",
+  "websiteUrl": "https://widgetdash.app",
+  "repository": {
+    "url": "https://github.com/purian/widgetdash-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "widgetdash-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "WIDGETDASH_WRITE_KEY",
+          "description": "WidgetDash write key (from https://widgetdash.app/app). Required to push or delete widget data.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "WIDGETDASH_READ_KEY",
+          "description": "Optional WidgetDash read key for read-only tools. Falls back to the write key.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "WIDGETDASH_API_URL",
+          "description": "API base URL.",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "https://api.widgetdash.app"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "name": "widgetdash-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for WidgetDash: let AI agents push any number to your iPhone Home Screen / Lock Screen widgets and Live Activities.",
+  "mcpName": "io.github.purian/widgetdash-mcp",
+  "license": "MIT",
+  "author": "WidgetDash (https://widgetdash.app)",
+  "homepage": "https://widgetdash.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/purian/widgetdash-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/purian/widgetdash-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "widgetdash",
+    "iphone",
+    "ios",
+    "widget",
+    "lock-screen",
+    "live-activities",
+    "dashboard",
+    "metrics",
+    "claude",
+    "cursor"
+  ],
+  "type": "module",
+  "bin": {
+    "widgetdash-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test test/e2e.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}
