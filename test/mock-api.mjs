@@ -11,6 +11,60 @@ import { createServer } from "node:http";
 
 const FREE_SOURCE_LIMIT = 5;
 
+// Like the real API (app/services/metrics.py): a timestamp value is ISO 8601
+// (Z, offset, or no zone = UTC) or Unix epoch seconds, stored as
+// YYYY-MM-DDTHH:MM:SSZ and read back as a relative time plus the ISO time.
+function parseTimestamp(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  let ms;
+  if (/^-?\d+(\.\d+)?$/.test(text)) ms = Number(text) * 1000;
+  else if (/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?(Z|[+-]\d{2}:?\d{2})?$/.test(text)) {
+    const iso = text.replace(" ", "T");
+    ms = Date.parse(/(Z|[+-]\d{2}:?\d{2})$/.test(iso) || iso.length === 10 ? iso : `${iso}Z`);
+  } else return null;
+  return Number.isFinite(ms) ? new Date(ms) : null;
+}
+
+const formatTimestamp = (d) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+function relativeTime(d) {
+  const seconds = (Date.now() - d.getTime()) / 1000;
+  const span = Math.abs(seconds);
+  if (span < 60) return "just now";
+  const [amount, unit] = span < 3600 ? [Math.floor(span / 60), "m"] : span < 86400 ? [Math.floor(span / 3600), "h"] : [Math.floor(span / 86400), "d"];
+  return seconds < 0 ? `in ${amount}${unit}` : `${amount}${unit} ago`;
+}
+
+function ruleMatches(rule, value) {
+  if ("equals" in rule && value.trim().toLowerCase() !== String(rule.equals).trim().toLowerCase()) return false;
+  if ("below" in rule || "above" in rule) {
+    const m = value.match(/-?\d[\d,]*(?:\.\d+)?|-?\.\d+/);
+    if (!m) return false;
+    const n = Number(m[0].replace(/,/g, ""));
+    if ("below" in rule && !(n < rule.below)) return false;
+    if ("above" in rule && !(n > rule.above)) return false;
+  }
+  return true;
+}
+
+// Reads are rendered: timestamps become relative, and a metric pushed without a
+// color gets the first matching color rule's color.
+function renderMetrics(metrics, colorRules) {
+  return metrics.map((stored) => {
+    const m = { ...stored, timestamp: null };
+    if (m.type === "timestamp") {
+      const d = parseTimestamp(m.value);
+      if (d) Object.assign(m, { timestamp: formatTimestamp(d), value: relativeTime(d) });
+    }
+    if (!m.color) {
+      const rule = (colorRules?.[m.label] ?? []).find((r) => ruleMatches(r, String(m.value)));
+      if (rule) m.color = rule.color;
+    }
+    return m;
+  });
+}
+
 export async function startMockApi() {
   const users = []; // { id, name, readKey, writeKey, tier, createdAt, sources: Map }
 
@@ -25,10 +79,11 @@ export async function startMockApi() {
       icon: s.icon,
       category: s.category,
       sort_order: s.sort_order,
-      metrics: s.metrics,
+      metrics: renderMetrics(s.metrics, s.color_rules),
       raw_data: s.raw_data,
       updated_at: s.updated_at,
       changed_at: s.changed_at,
+      color_rules: s.color_rules ?? null,
     };
   }
 
@@ -118,6 +173,17 @@ export async function startMockApi() {
         type: x.type ?? "text",
         color: x.color ?? null,
       }));
+      for (const [i, x] of metrics.entries()) {
+        if (x.type !== "timestamp") continue;
+        const d = parseTimestamp(x.value);
+        if (!d) {
+          const msg =
+            `Value error, metric "${x.label}": a timestamp value must be ISO 8601 ` +
+            "(for example 2026-10-18T05:00:00Z) or Unix epoch seconds";
+          return send(422, { detail: [{ type: "value_error", loc: ["body", "metrics", i], msg }] });
+        }
+        x.value = formatTimestamp(d);
+      }
       if (!s) {
         s = {
           source_key: key,
@@ -140,6 +206,8 @@ export async function startMockApi() {
         if (body[field] != null) s[field] = body[field];
       }
       Object.assign(s, { metrics, raw_data: body.raw_data ?? null, updated_at: t });
+      // color_rules: present replaces them, {} clears them, absent keeps them.
+      if (body.color_rules != null) s.color_rules = Object.keys(body.color_rules).length ? body.color_rules : null;
       return send(200, sourceData(s));
     }
     if (m && req.method === "GET") {
@@ -156,7 +224,8 @@ export async function startMockApi() {
       if (!user) return;
       return send(200, {
         user: user.name,
-        sources: sorted(user).filter((s) => s.enabled).map(sourceData),
+        // Like the real API, /widget leaves color_rules out (null); their colors are in the metrics.
+        sources: sorted(user).filter((s) => s.enabled).map((s) => ({ ...sourceData(s), color_rules: null })),
         fetched_at: now(),
       });
     }

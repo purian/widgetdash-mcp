@@ -10,7 +10,7 @@ import { ApiError, ConfigError, type DataPush, type Metric, type SourceData, Wid
  * not bound metric fields; the caps below are generous sanity limits so a
  * runaway agent cannot push megabytes into a Home Screen widget.
  */
-const METRIC_TYPES = ["number", "text", "status", "progress", "percentage"] as const;
+const METRIC_TYPES = ["number", "text", "status", "progress", "percentage", "timestamp"] as const;
 // Colors the WidgetDash iOS app renders; anything else renders as the default color.
 const METRIC_COLORS = ["green", "red", "yellow", "blue", "gray", "orange", "purple", "cyan"] as const;
 const MAX_METRICS = 50;
@@ -36,12 +36,17 @@ const typeSchema = z
   .describe(
     "How the widget renders the value: 'number' = big bold figure (counts, money, KPIs); 'text' = plain short string; " +
       "'status' = colored badge (e.g. 'Healthy', 'Down'); 'progress' = bar, value must be 0-100; " +
-      "'percentage' = compact percent text. If omitted: 'number' for numeric-looking values (42, $12,400, 3.5%), otherwise 'text'.",
+      "'percentage' = compact percent text; 'timestamp' = a moment shown as live relative time (e.g. '8 hours ago'), value is " +
+      "ISO 8601 like 2026-10-23T05:00:00Z or Unix epoch seconds. " +
+      "If omitted: 'number' for numeric-looking values (42, $12,400, 3.5%), otherwise 'text'.",
   );
 
 const valueSchema = z
   .union([z.string().max(1000), z.number()])
-  .describe("The value to display, pre-formatted as you want it shown (e.g. '$12,400', '42', 'Healthy'). For 'progress' use 0-100.");
+  .describe(
+    "The value to display, pre-formatted as you want it shown (e.g. '$12,400', '42', 'Healthy'). For 'progress' use 0-100; " +
+      "for 'timestamp' an ISO 8601 time or Unix epoch seconds.",
+  );
 
 const metricSchema = z.object({
   label: z.string().trim().min(1).max(255).describe("Short label shown on the widget, e.g. 'MRR' or 'Users online'."),
@@ -106,6 +111,21 @@ function normalizeMetric(m: MetricInput): Metric {
   return metric;
 }
 
+/**
+ * A metric read back from the API, turned back into what was pushed so that
+ * re-sending it changes nothing. Reads are rendered: a timestamp's value is
+ * relative ("8h ago", the real time is in `timestamp`), and colors picked by
+ * the source's color_rules are filled in. Re-sending those as-is would be
+ * rejected (422) or would pin the rule's color as an explicit one, which
+ * always wins over the rules.
+ */
+function storedForm(m: Metric, colorRules: SourceData["color_rules"]): Metric {
+  const value = m.type === "timestamp" && m.timestamp ? m.timestamp : m.value;
+  const metric: Metric = { label: m.label, value, type: m.type };
+  if (m.color && !colorRules?.[m.label]?.length) metric.color = m.color;
+  return metric;
+}
+
 function assertUniqueLabels(metrics: Metric[]): void {
   const seen = new Set<string>();
   for (const m of metrics) {
@@ -124,7 +144,7 @@ function humanize(sourceKey: string): string {
 }
 
 function formatMetric(m: Metric): string {
-  const extras = [m.type, m.color].filter(Boolean).join(", ");
+  const extras = [m.type, m.color, m.timestamp].filter(Boolean).join(", ");
   return `  - ${m.label}: ${m.value}${extras ? ` [${extras}]` : ""}`;
 }
 
@@ -272,11 +292,12 @@ export function createServer(client: WidgetDashClient, version: string): McpServ
     async (args) => {
       try {
         const existing = await loadExisting(client, args.source_key);
-        const current = existing?.data.metrics ?? [];
+        const colorRules = existing?.data.color_rules;
+        const current = (existing?.data.metrics ?? []).map((m) => storedForm(m, colorRules));
         const label = args.label;
         const idx = current.findIndex((m) => m.label === label);
         const prev = idx >= 0 ? current[idx] : undefined;
-        // Omitted type/color keep the existing metric's style.
+        // Omitted type/color keep the existing metric's style (a rule-picked color is left to the rules).
         const prevType = METRIC_TYPES.find((t) => t === prev?.type);
         const prevColor = METRIC_COLORS.find((c) => c === prev?.color);
         const metric = normalizeMetric({ label, value: args.value, type: args.type ?? prevType, color: args.color ?? prevColor });

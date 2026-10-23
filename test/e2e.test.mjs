@@ -193,10 +193,10 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(d.json.category, "finance");
     assert.deepEqual(d.json.raw_data, { currency: "USD" });
     assert.deepEqual(d.json.metrics, [
-      { label: "MRR", value: "$12,400", type: "number", color: "green" },
-      { label: "Customers", value: "312", type: "number", color: null },
-      { label: "Quota", value: "72", type: "progress", color: "blue" },
-      { label: "Status", value: "Healthy", type: "status", color: "green" },
+      { label: "MRR", value: "$12,400", type: "number", color: "green", timestamp: null },
+      { label: "Customers", value: "312", type: "number", color: null, timestamp: null },
+      { label: "Quota", value: "72", type: "progress", color: "blue", timestamp: null },
+      { label: "Status", value: "Healthy", type: "status", color: "green", timestamp: null },
     ]);
   });
 
@@ -214,7 +214,7 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(d.json.icon, "dollarsign.circle.fill");
     assert.equal(d.json.category, "finance");
     assert.deepEqual(d.json.raw_data, { currency: "USD" });
-    assert.deepEqual(d.json.metrics, [{ label: "MRR", value: "$13,000", type: "number", color: "green" }]);
+    assert.deepEqual(d.json.metrics, [{ label: "MRR", value: "$13,000", type: "number", color: "green", timestamp: null }]);
     const sources = await api("GET", "/api/v1/sources", keys.api_key_read);
     assert.equal(sources.json.find((s) => s.source_key === "stripe").sort_order, 1);
   });
@@ -249,9 +249,9 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     const d = await api("GET", "/api/v1/data/stripe", keys.api_key_read);
     assert.equal(d.json.display_name, "Stripe");
     assert.deepEqual(d.json.metrics, [
-      { label: "MRR", value: "$14,250", type: "number", color: "green" },
-      { label: "Churn", value: "2.1%", type: "percentage", color: null },
-      { label: "Trials", value: "9", type: "number", color: null },
+      { label: "MRR", value: "$14,250", type: "number", color: "green", timestamp: null },
+      { label: "Churn", value: "2.1%", type: "percentage", color: null, timestamp: null },
+      { label: "Trials", value: "9", type: "number", color: null, timestamp: null },
     ]);
     // Omitted type/color keep the existing metric's style; text values stay text.
     r = await call(mcp, "push_number", { source_key: "stripe", label: "Churn", value: "1.9%" });
@@ -260,9 +260,9 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(r.isError, false, r.text);
     const d2 = await api("GET", "/api/v1/data/stripe", keys.api_key_read);
     assert.deepEqual(d2.json.metrics.slice(1), [
-      { label: "Churn", value: "1.9%", type: "percentage", color: null },
-      { label: "Trials", value: "9", type: "number", color: null },
-      { label: "Plan", value: "Scale", type: "text", color: null },
+      { label: "Churn", value: "1.9%", type: "percentage", color: null, timestamp: null },
+      { label: "Trials", value: "9", type: "number", color: null, timestamp: null },
+      { label: "Plan", value: "Scale", type: "text", color: null, timestamp: null },
     ]);
   });
 
@@ -273,7 +273,72 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     const d = await api("GET", "/api/v1/data/open_tickets", keys.api_key_read);
     assert.equal(d.json.display_name, "Open Tickets");
     assert.equal(d.json.icon, "ticket.fill");
-    assert.deepEqual(d.json.metrics, [{ label: "Open", value: "7", type: "number", color: "yellow" }]);
+    assert.deepEqual(d.json.metrics, [{ label: "Open", value: "7", type: "number", color: "yellow", timestamp: null }]);
+  });
+
+  test("timestamp metrics: pushed as ISO or epoch, read back as relative time plus the ISO time", async () => {
+    // Own user so the other tests' source counts don't change.
+    const u = await newUser("mcp-e2e-timestamps");
+    const c = await connect({ WIDGETDASH_WRITE_KEY: u.api_key_write, WIDGETDASH_READ_KEY: u.api_key_read });
+    const epoch = 1761200000;
+    const epochIso = new Date(epoch * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+    let r = await call(c, "push_metrics", {
+      source_key: "ha",
+      metrics: [
+        { label: "Updates", value: 3 },
+        { label: "Last backup", value: "2026-10-23T05:00:00Z", type: "timestamp" },
+        { label: "Synced", value: epoch, type: "timestamp" },
+      ],
+    });
+    assert.equal(r.isError, false, r.text);
+    const d = await api("GET", "/api/v1/data/ha", u.api_key_read);
+    const [, backup, synced] = d.json.metrics;
+    assert.equal(backup.type, "timestamp");
+    assert.equal(backup.timestamp, "2026-10-23T05:00:00Z");
+    assert.match(backup.value, /ago$/);
+    assert.equal(synced.timestamp, epochIso, "epoch seconds are stored as ISO");
+    r = await call(c, "get_widget_data", { source_key: "ha" });
+    assert.match(r.text, /Last backup: \S+ ago \[timestamp, 2026-10-23T05:00:00Z\]/, "reads show the real time too");
+    r = await call(c, "push_number", { source_key: "ha", label: "When", value: "yesterday", type: "timestamp" });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /422.*ISO 8601/);
+  });
+
+  test("push_number keeps other timestamp metrics and color-rule colors as stored", async () => {
+    const u = await newUser("mcp-e2e-rules");
+    const c = await connect({ WIDGETDASH_WRITE_KEY: u.api_key_write, WIDGETDASH_READ_KEY: u.api_key_read });
+    // color_rules aren't an MCP option; set them through the API as a script would.
+    let w = await api("PUT", "/api/v1/data/ha", u.api_key_write, {
+      metrics: [
+        { label: "Updates", value: "3", type: "number" },
+        { label: "Last backup", value: "2026-10-23T05:00:00Z", type: "timestamp" },
+      ],
+      color_rules: { Updates: [{ above: 0, color: "yellow" }, { color: "green" }] },
+    });
+    assert.equal(w.status, 200);
+    const get = async () => (await api("GET", "/api/v1/data/ha", u.api_key_read)).json.metrics;
+    assert.equal((await get())[0].color, "yellow", "rule colors 3 yellow");
+
+    // Changing another metric used to re-send "14h ago" as the timestamp (422).
+    let r = await call(c, "push_number", { source_key: "ha", label: "Disk", value: "41%" });
+    assert.equal(r.isError, false, r.text);
+    let metrics = await get();
+    assert.equal(metrics[1].timestamp, "2026-10-23T05:00:00Z", "other timestamp kept exactly");
+    assert.equal(metrics[2].label, "Disk");
+
+    // ...and pinned the rule's yellow as an explicit color, so 0 stayed yellow.
+    r = await call(c, "push_number", { source_key: "ha", label: "Updates", value: 0 });
+    assert.equal(r.isError, false, r.text);
+    metrics = await get();
+    assert.equal(metrics[0].value, "0");
+    assert.equal(metrics[0].color, "green", "color rules still decide the color");
+
+    // A new time with no type keeps the metric a timestamp.
+    r = await call(c, "push_number", { source_key: "ha", label: "Last backup", value: "2026-10-23T09:30:00Z" });
+    assert.equal(r.isError, false, r.text);
+    metrics = await get();
+    assert.equal(metrics[1].type, "timestamp");
+    assert.equal(metrics[1].timestamp, "2026-10-23T09:30:00Z");
   });
 
   test("input validation rejects bad keys, colors, progress values and duplicate labels", async () => {
