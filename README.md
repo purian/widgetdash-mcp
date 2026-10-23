@@ -96,8 +96,9 @@ Each metric has a `label`, a `value`, an optional `type` and an optional `color`
   - `status`: a colored badge.
   - `progress`: a bar. The value must be 0 to 100, and a trailing `%` is removed for you.
   - `percentage`: compact percent text.
+  - `timestamp`: a moment, shown as a live relative time such as "8 hours ago". Send an ISO 8601 time (`2026-10-23T05:00:00Z`) or Unix epoch seconds. Reads show the relative time plus the exact time.
 
-  If you leave `type` out, values that look like numbers (`42`, `$12,400`, `3.5%`) become `number` and everything else becomes `text`. With `push_number`, an existing metric keeps its current type and color.
+  If you leave `type` out, values that look like numbers (`42`, `$12,400`, `3.5%`) become `number` and everything else becomes `text`. With `push_number`, an existing metric keeps its current type and color, and the source's other metrics are re-sent as they were stored: timestamps keep their exact time, and colors chosen by the source's color rules stay under the rules' control.
 - **`color`**: `green`, `red`, `yellow`, `blue`, `gray`, `orange`, `purple` or `cyan`.
 - **`icon`**: any [SF Symbol](https://developer.apple.com/sf-symbols/) name, e.g. `dollarsign.circle.fill`, `chart.bar.fill`, `server.rack` or `heart.fill`.
 

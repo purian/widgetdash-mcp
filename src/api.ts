@@ -14,6 +14,8 @@ export interface Metric {
   value: string;
   type: string;
   color?: string | null;
+  /** Read only: the ISO time of a 'timestamp' metric, whose `value` is then relative ("8h ago"). */
+  timestamp?: string | null;
 }
 
 /** Body of PUT /api/v1/data/{source_key}. */
@@ -37,6 +39,8 @@ export interface SourceData {
   raw_data?: unknown;
   updated_at: string | null;
   changed_at: string | null;
+  /** Per-label color rules (set via the API); the colors they pick come back in metric.color. */
+  color_rules?: Record<string, unknown[]> | null;
 }
 
 /** Response of GET /api/v1/widget. */
