@@ -79,7 +79,10 @@ const metadataShape = {
     .number()
     .int()
     .optional()
-    .describe("Position among sources on the widget (lower first). If omitted, keeps the existing order (default 0)."),
+    .describe(
+      "Position for a NEW source among your sources (lower first, default 0). Ignored when updating an existing source: " +
+        "its order is set in the WidgetDash app.",
+    ),
 };
 
 type MetricInput = z.infer<typeof metricSchema>;
@@ -158,8 +161,10 @@ function toolError(client: WidgetDashClient, err: unknown): CallToolResult {
 
 /**
  * Current state of a source, used so that omitted fields keep their existing
- * values. PUT /api/v1/data/{key} overwrites display_name/icon/category/
- * sort_order/raw_data with defaults when they are missing from the body.
+ * values. The API keeps omitted display_name/icon/category and ignores
+ * sort_order for existing sources, but resets raw_data when it is missing;
+ * re-sending the current values also keeps older WidgetDash servers, which
+ * reset all of them, from losing anything.
  */
 async function loadExisting(client: WidgetDashClient, sourceKey: string) {
   const [data, sources] = await Promise.all([client.getSource(sourceKey, "write"), client.listSources("write")]);
@@ -215,7 +220,8 @@ export function createServer(client: WidgetDashClient, version: string): McpServ
         "Create or update a WidgetDash data source shown on the user's iPhone Home Screen / Lock Screen widgets and Live Activities. " +
         "Sets the source's title, SF Symbol icon, category and its full list of metrics (label + value + type + color). " +
         "The metrics list REPLACES the source's current metrics; use push_number to change a single value. " +
-        "Omitted display_name/icon/category/sort_order keep their current values. Requires WIDGETDASH_WRITE_KEY.",
+        "Omitted display_name/icon/category keep their current values; sort_order only applies when the source is created. " +
+        "Requires WIDGETDASH_WRITE_KEY.",
       inputSchema: {
         source_key: sourceKeySchema,
         ...metadataShape,

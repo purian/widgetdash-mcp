@@ -81,7 +81,7 @@ Other MCP clients that can launch a stdio server work the same way. The command 
 | Tool | What it does |
 | --- | --- |
 | `push_number` | Sets one value on a source, e.g. `MRR = $12,400`. Other metrics on the source stay as they are. The metric is matched by label. If the source doesn't exist yet, it is created. |
-| `push_metrics` | Creates or updates a source: title (`display_name`), SF Symbol `icon`, `category`, `sort_order` and the full `metrics` list. The list **replaces** the source's current metrics. |
+| `push_metrics` | Creates or updates a source: title (`display_name`), SF Symbol `icon`, `category`, `sort_order` (new sources only; reorder in the app) and the full `metrics` list. The list **replaces** the source's current metrics. |
 | `list_sources` | Lists your sources (key, title, icon, hidden or shown) and how many your plan allows. The free plan allows 5. |
 | `get_widget_data` | Shows what's on the widget now: every enabled source with its metrics and last update time, or a single source. |
 | `delete_source` | Permanently deletes a source and ends any Live Activity for it. |
@@ -101,7 +101,7 @@ Each metric has a `label`, a `value`, an optional `type` and an optional `color`
 - **`color`**: `green`, `red`, `yellow`, `blue`, `gray`, `orange`, `purple` or `cyan`.
 - **`icon`**: any [SF Symbol](https://developer.apple.com/sf-symbols/) name, e.g. `dollarsign.circle.fill`, `chart.bar.fill`, `server.rack` or `heart.fill`.
 
-Fields you leave out (`display_name`, `icon`, `category`, `sort_order`, `raw_data`) keep their current values. This means an update from the agent won't undo the order you set in the app.
+Fields you leave out (`display_name`, `icon`, `category`, `raw_data`) keep their current values. `sort_order` only places a new source: once it exists, its order is the one set in the app, so an agent can't undo it.
 
 ## Security
 

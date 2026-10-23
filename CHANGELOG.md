@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `sort_order` only places a new source. The WidgetDash API ignores it when updating an existing source, whose order is set in the app; the `push_metrics` and `sort_order` descriptions and the README now say so, and the test mock matches the API.
+
 ## [0.1.0] - 2026-09-25
 
 ### Added
