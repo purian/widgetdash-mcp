@@ -219,6 +219,21 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(sources.json.find((s) => s.source_key === "stripe").sort_order, 1);
   });
 
+  test("push_metrics can't move an existing source; sort_order places a new one", async () => {
+    // stripe is at 1 after the app reorder in the previous test.
+    const r = await call(mcp, "push_metrics", { source_key: "stripe", sort_order: 0, metrics: [{ label: "MRR", value: "$13,100" }] });
+    assert.equal(r.isError, false, r.text);
+    let sources = await api("GET", "/api/v1/sources", keys.api_key_read);
+    assert.equal(sources.json.find((s) => s.source_key === "stripe").sort_order, 1);
+
+    const created = await call(mcp, "push_metrics", { source_key: "placed", sort_order: 5, metrics: [{ label: "Count", value: "1" }] });
+    assert.equal(created.isError, false, created.text);
+    sources = await api("GET", "/api/v1/sources", keys.api_key_read);
+    assert.equal(sources.json.find((s) => s.source_key === "placed").sort_order, 5);
+    const cleanup = await call(mcp, "delete_source", { source_key: "placed" });
+    assert.equal(cleanup.isError, false, cleanup.text);
+  });
+
   test("push_number updates one metric in place and appends new ones", async () => {
     await call(mcp, "push_metrics", {
       source_key: "stripe",

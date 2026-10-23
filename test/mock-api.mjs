@@ -119,21 +119,27 @@ export async function startMockApi() {
         color: x.color ?? null,
       }));
       if (!s) {
-        s = { source_key: key, enabled: true, created_at: t, changed_at: t };
+        s = {
+          source_key: key,
+          enabled: true,
+          created_at: t,
+          changed_at: t,
+          display_name: "Unnamed",
+          icon: "circle.fill",
+          category: "general",
+          // Like the real API, sort_order only places a new source.
+          sort_order: body.sort_order ?? 0,
+        };
         user.sources.set(key, s);
       } else if (JSON.stringify(s.metrics) !== JSON.stringify(metrics)) {
         s.changed_at = t;
       }
-      // Like the real API, omitted fields reset to their defaults.
-      Object.assign(s, {
-        display_name: body.display_name ?? "Unnamed",
-        icon: body.icon ?? "circle.fill",
-        category: body.category ?? "general",
-        sort_order: body.sort_order ?? 0,
-        metrics,
-        raw_data: body.raw_data ?? null,
-        updated_at: t,
-      });
+      // Like the real API: omitted display_name/icon/category keep their values,
+      // sort_order is ignored for an existing source, and raw_data is replaced.
+      for (const field of ["display_name", "icon", "category"]) {
+        if (body[field] != null) s[field] = body[field];
+      }
+      Object.assign(s, { metrics, raw_data: body.raw_data ?? null, updated_at: t });
       return send(200, sourceData(s));
     }
     if (m && req.method === "GET") {
