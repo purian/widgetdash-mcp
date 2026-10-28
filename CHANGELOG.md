@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
+### Added
+
+- `wide` on a metric (`"wide": true`): a full-width row of its own on Large widgets (iOS app 1.8+, WidgetDash API 1.14+), for long text such as the title of what you last watched. `get_widget_data` marks wide metrics.
+
+### Fixed
+
+- `push_number` keeps `wide`: on the metric it changes and on the other metrics it re-sends. Without this, changing any value on a source would turn its wide metric back into a normal one.
+
 ## [0.1.0] - 2026-10-24
 
 First release: a stdio MCP server that lets AI agents push numbers to WidgetDash iPhone Home Screen / Lock Screen widgets and Live Activities.
@@ -21,5 +31,6 @@ First release: a stdio MCP server that lets AI agents push numbers to WidgetDash
 - End-to-end tests (`node:test`) that drive every tool through a real MCP client over stdio, against an in-memory mock of the WidgetDash API that renders reads like the real API. No network or keys are needed; set `WIDGETDASH_TEST_SERVER_DIR` to run them against a local WidgetDash server instead.
 - Draft `server.json` for the official MCP Registry.
 
-[Unreleased]: https://github.com/purian/widgetdash-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/purian/widgetdash-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/purian/widgetdash-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/purian/widgetdash-mcp/releases/tag/v0.1.0

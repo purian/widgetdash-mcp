@@ -193,10 +193,10 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(d.json.category, "finance");
     assert.deepEqual(d.json.raw_data, { currency: "USD" });
     assert.deepEqual(d.json.metrics, [
-      { label: "MRR", value: "$12,400", type: "number", color: "green", timestamp: null },
-      { label: "Customers", value: "312", type: "number", color: null, timestamp: null },
-      { label: "Quota", value: "72", type: "progress", color: "blue", timestamp: null },
-      { label: "Status", value: "Healthy", type: "status", color: "green", timestamp: null },
+      { label: "MRR", value: "$12,400", type: "number", color: "green", timestamp: null, wide: false },
+      { label: "Customers", value: "312", type: "number", color: null, timestamp: null, wide: false },
+      { label: "Quota", value: "72", type: "progress", color: "blue", timestamp: null, wide: false },
+      { label: "Status", value: "Healthy", type: "status", color: "green", timestamp: null, wide: false },
     ]);
   });
 
@@ -214,7 +214,7 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(d.json.icon, "dollarsign.circle.fill");
     assert.equal(d.json.category, "finance");
     assert.deepEqual(d.json.raw_data, { currency: "USD" });
-    assert.deepEqual(d.json.metrics, [{ label: "MRR", value: "$13,000", type: "number", color: "green", timestamp: null }]);
+    assert.deepEqual(d.json.metrics, [{ label: "MRR", value: "$13,000", type: "number", color: "green", timestamp: null, wide: false }]);
     const sources = await api("GET", "/api/v1/sources", keys.api_key_read);
     assert.equal(sources.json.find((s) => s.source_key === "stripe").sort_order, 1);
   });
@@ -249,9 +249,9 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     const d = await api("GET", "/api/v1/data/stripe", keys.api_key_read);
     assert.equal(d.json.display_name, "Stripe");
     assert.deepEqual(d.json.metrics, [
-      { label: "MRR", value: "$14,250", type: "number", color: "green", timestamp: null },
-      { label: "Churn", value: "2.1%", type: "percentage", color: null, timestamp: null },
-      { label: "Trials", value: "9", type: "number", color: null, timestamp: null },
+      { label: "MRR", value: "$14,250", type: "number", color: "green", timestamp: null, wide: false },
+      { label: "Churn", value: "2.1%", type: "percentage", color: null, timestamp: null, wide: false },
+      { label: "Trials", value: "9", type: "number", color: null, timestamp: null, wide: false },
     ]);
     // Omitted type/color keep the existing metric's style; text values stay text.
     r = await call(mcp, "push_number", { source_key: "stripe", label: "Churn", value: "1.9%" });
@@ -260,9 +260,9 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     assert.equal(r.isError, false, r.text);
     const d2 = await api("GET", "/api/v1/data/stripe", keys.api_key_read);
     assert.deepEqual(d2.json.metrics.slice(1), [
-      { label: "Churn", value: "1.9%", type: "percentage", color: null, timestamp: null },
-      { label: "Trials", value: "9", type: "number", color: null, timestamp: null },
-      { label: "Plan", value: "Scale", type: "text", color: null, timestamp: null },
+      { label: "Churn", value: "1.9%", type: "percentage", color: null, timestamp: null, wide: false },
+      { label: "Trials", value: "9", type: "number", color: null, timestamp: null, wide: false },
+      { label: "Plan", value: "Scale", type: "text", color: null, timestamp: null, wide: false },
     ]);
   });
 
@@ -273,7 +273,7 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     const d = await api("GET", "/api/v1/data/open_tickets", keys.api_key_read);
     assert.equal(d.json.display_name, "Open Tickets");
     assert.equal(d.json.icon, "ticket.fill");
-    assert.deepEqual(d.json.metrics, [{ label: "Open", value: "7", type: "number", color: "yellow", timestamp: null }]);
+    assert.deepEqual(d.json.metrics, [{ label: "Open", value: "7", type: "number", color: "yellow", timestamp: null, wide: false }]);
   });
 
   test("timestamp metrics: pushed as ISO or epoch, read back as relative time plus the ISO time", async () => {
@@ -339,6 +339,35 @@ describe(`widgetdash-mcp over stdio against ${SERVER_DIR ? "a local WidgetDash s
     metrics = await get();
     assert.equal(metrics[1].type, "timestamp");
     assert.equal(metrics[1].timestamp, "2026-10-23T09:30:00Z");
+  });
+
+  test("wide metrics: pushed, read back, and kept by push_number", async () => {
+    // Own user so the other tests' source counts don't change.
+    const u = await newUser("mcp-e2e-wide");
+    const c = await connect({ WIDGETDASH_WRITE_KEY: u.api_key_write, WIDGETDASH_READ_KEY: u.api_key_read });
+    let r = await call(c, "push_metrics", {
+      source_key: "media",
+      metrics: [
+        { label: "Photos", value: 12953 },
+        { label: "Last watched", value: "One Hundred Years of Solitude S2E3", wide: true },
+      ],
+    });
+    assert.equal(r.isError, false, r.text);
+    const wideOf = async () =>
+      (await api("GET", "/api/v1/data/media", u.api_key_read)).json.metrics.map((m) => [m.label, m.wide]);
+    assert.deepEqual(await wideOf(), [["Photos", false], ["Last watched", true]]);
+    // Changing another metric re-sends the wide one, which must stay wide.
+    r = await call(c, "push_number", { source_key: "media", label: "Photos", value: 12960 });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(await wideOf(), [["Photos", false], ["Last watched", true]]);
+    // Changing the wide metric itself keeps it wide.
+    r = await call(c, "push_number", { source_key: "media", label: "Last watched", value: "Slow Horses S5E1" });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(await wideOf(), [["Photos", false], ["Last watched", true]]);
+    r = await call(c, "get_widget_data", { source_key: "media" });
+    assert.match(r.text, /Last watched: Slow Horses S5E1 \[text, wide\]/);
+    r = await call(c, "push_metrics", { source_key: "media", metrics: [{ label: "Photos", value: 1, wide: "yes" }] });
+    assert.equal(r.isError, true, "a non-boolean wide is rejected");
   });
 
   test("input validation rejects bad keys, colors, progress values and duplicate labels", async () => {

@@ -16,6 +16,8 @@ export interface Metric {
   color?: string | null;
   /** Read only: the ISO time of a 'timestamp' metric, whose `value` is then relative ("8h ago"). */
   timestamp?: string | null;
+  /** A full-width row on Large widgets. Sent only when true; reads always include it. */
+  wide?: boolean;
 }
 
 /** Body of PUT /api/v1/data/{source_key}. */
