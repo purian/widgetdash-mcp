@@ -53,6 +53,13 @@ const metricSchema = z.object({
   value: valueSchema,
   type: typeSchema.optional(),
   color: colorSchema.optional(),
+  wide: z
+    .boolean()
+    .optional()
+    .describe(
+      "Optional. true gives the metric a full-width row of its own on Large widgets (iOS app 1.8+), for long text such as a title. " +
+        "Other text that shares a row shows up to two lines. Put wide metrics last to keep the others in one row.",
+    ),
 });
 
 const metadataShape = {
@@ -108,6 +115,7 @@ function normalizeMetric(m: MetricInput): Metric {
   }
   const metric: Metric = { label: m.label, value, type };
   if (m.color) metric.color = m.color;
+  if (m.wide) metric.wide = true;
   return metric;
 }
 
@@ -117,12 +125,13 @@ function normalizeMetric(m: MetricInput): Metric {
  * relative ("8h ago", the real time is in `timestamp`), and colors picked by
  * the source's color_rules are filled in. Re-sending those as-is would be
  * rejected (422) or would pin the rule's color as an explicit one, which
- * always wins over the rules.
+ * always wins over the rules. `wide` is kept, so a full-width row stays one.
  */
 function storedForm(m: Metric, colorRules: SourceData["color_rules"]): Metric {
   const value = m.type === "timestamp" && m.timestamp ? m.timestamp : m.value;
   const metric: Metric = { label: m.label, value, type: m.type };
   if (m.color && !colorRules?.[m.label]?.length) metric.color = m.color;
+  if (m.wide) metric.wide = true;
   return metric;
 }
 
@@ -144,7 +153,7 @@ function humanize(sourceKey: string): string {
 }
 
 function formatMetric(m: Metric): string {
-  const extras = [m.type, m.color, m.timestamp].filter(Boolean).join(", ");
+  const extras = [m.type, m.color, m.timestamp, m.wide ? "wide" : null].filter(Boolean).join(", ");
   return `  - ${m.label}: ${m.value}${extras ? ` [${extras}]` : ""}`;
 }
 
@@ -297,10 +306,17 @@ export function createServer(client: WidgetDashClient, version: string): McpServ
         const label = args.label;
         const idx = current.findIndex((m) => m.label === label);
         const prev = idx >= 0 ? current[idx] : undefined;
-        // Omitted type/color keep the existing metric's style (a rule-picked color is left to the rules).
+        // Omitted type/color keep the existing metric's style (a rule-picked color is left to the rules),
+        // and a wide metric stays wide.
         const prevType = METRIC_TYPES.find((t) => t === prev?.type);
         const prevColor = METRIC_COLORS.find((c) => c === prev?.color);
-        const metric = normalizeMetric({ label, value: args.value, type: args.type ?? prevType, color: args.color ?? prevColor });
+        const metric = normalizeMetric({
+          label,
+          value: args.value,
+          type: args.type ?? prevType,
+          color: args.color ?? prevColor,
+          wide: prev?.wide,
+        });
         let metrics: Metric[];
         if (idx >= 0) {
           metrics = current.map((m, i) => (i === idx ? metric : m));

@@ -88,7 +88,7 @@ Other MCP clients that can launch a stdio server work the same way. The command 
 
 ### Metrics
 
-Each metric has a `label`, a `value`, an optional `type` and an optional `color`:
+Each metric has a `label`, a `value`, an optional `type`, an optional `color` and an optional `wide`:
 
 - **`type`** sets how the widget draws the value:
   - `number`: a big bold figure.
@@ -98,8 +98,9 @@ Each metric has a `label`, a `value`, an optional `type` and an optional `color`
   - `percentage`: compact percent text.
   - `timestamp`: a moment, shown as a live relative time such as "8 hours ago". Send an ISO 8601 time (`2026-10-23T05:00:00Z`) or Unix epoch seconds. Reads show the relative time plus the exact time.
 
-  If you leave `type` out, values that look like numbers (`42`, `$12,400`, `3.5%`) become `number` and everything else becomes `text`. With `push_number`, an existing metric keeps its current type and color, and the source's other metrics are re-sent as they were stored: timestamps keep their exact time, and colors chosen by the source's color rules stay under the rules' control.
+  If you leave `type` out, values that look like numbers (`42`, `$12,400`, `3.5%`) become `number` and everything else becomes `text`. With `push_number`, an existing metric keeps its current type, color and `wide`, and the source's other metrics are re-sent as they were stored: timestamps keep their exact time, and colors chosen by the source's color rules stay under the rules' control.
 - **`color`**: `green`, `red`, `yellow`, `blue`, `gray`, `orange`, `purple` or `cyan`.
+- **`wide`**: `true` gives the metric a full-width row of its own on Large widgets (iOS app 1.8 or later), for long text such as a title. Other text that shares a row shows up to two lines. Put wide metrics last to keep the others in one row.
 - **`icon`**: any [SF Symbol](https://developer.apple.com/sf-symbols/) name, e.g. `dollarsign.circle.fill`, `chart.bar.fill`, `server.rack` or `heart.fill`.
 
 Fields you leave out (`display_name`, `icon`, `category`, `raw_data`) keep their current values. `sort_order` only places a new source: once it exists, its order is the one set in the app, so an agent can't undo it.

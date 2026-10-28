@@ -52,7 +52,7 @@ function ruleMatches(rule, value) {
 // color gets the first matching color rule's color.
 function renderMetrics(metrics, colorRules) {
   return metrics.map((stored) => {
-    const m = { ...stored, timestamp: null };
+    const m = { ...stored, timestamp: null, wide: stored.wide === true };
     if (m.type === "timestamp") {
       const d = parseTimestamp(m.value);
       if (d) Object.assign(m, { timestamp: formatTimestamp(d), value: relativeTime(d) });
@@ -172,6 +172,8 @@ export async function startMockApi() {
         value: x.value,
         type: x.type ?? "text",
         color: x.color ?? null,
+        // Like the real API: stored only when true, so older payloads are unchanged.
+        ...(x.wide === true ? { wide: true } : {}),
       }));
       for (const [i, x] of metrics.entries()) {
         if (x.type !== "timestamp") continue;
